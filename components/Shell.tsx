@@ -5,8 +5,15 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NAV } from "@/lib/catalog";
 import { loadSession, type SessionInfo } from "@/lib/client";
+import { ThemeToggle } from "./ThemeToggle";
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({
+  children,
+  theme,
+}: {
+  children: React.ReactNode;
+  theme: "dark" | "light";
+}) {
   const pathname = usePathname();
   const [session, setSession] = useState<SessionInfo>({ connected: false });
 
@@ -33,6 +40,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+        <ThemeToggle initial={theme} />
         <div className="session-pill">
           {session.connected ? (
             <>
