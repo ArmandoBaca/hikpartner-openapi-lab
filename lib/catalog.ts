@@ -1,4 +1,5 @@
 export const NAV = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/", label: "Conexión" },
   { href: "/sitios", label: "Sitios" },
   { href: "/dispositivos", label: "Dispositivos" },
@@ -12,6 +13,7 @@ export const NAV = [
   { href: "/instaladores", label: "Instaladores" },
   { href: "/vsaas", label: "VSaaS" },
   { href: "/cobertura", label: "Cobertura" },
+  { href: "/ayuda", label: "Ayuda" },
 ];
 
 export const EVENT_TYPES = [

@@ -608,7 +608,12 @@ export const modules: ModuleDef[] = [
         description: "POST /api/hpcgw/v1/audio/inter/cut",
         method: "POST",
         path: "/api/hpcgw/v1/audio/inter/cut",
-        fields: [json("body", "Cuerpo JSON", '{"deviceSerial":"","customAudioID":1}', true)],
+        fields: [json(
+          "body",
+          "Cuerpo JSON",
+          '{"deviceSerial":"","audioLevel":10,"enabled":true,"playMode":"order","audioVolume":80,"playAudioList":[{"audioSource":"customAudio","customAudioID":1}]}',
+          true,
+        )],
         rawBody: true,
       },
     ],
