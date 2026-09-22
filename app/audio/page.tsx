@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { DevicePicker, isSpeaker } from "@/components/DevicePicker";
 import { OpsGrid } from "@/components/OperationCard";
-import { hppCall, hppUpload } from "@/lib/client";
+import { hppCall, hppUpload, type HppCallResponse } from "@/lib/client";
 import { moduleBySlug } from "@/lib/operations";
 
 type UploadedAudio = {
@@ -24,21 +24,23 @@ type DeviceAudio = {
 
 type CallOutcome = { serial: string; ok: boolean; detail: string };
 
-async function runOnDevices(
-  path: string,
-  targets: string[],
-  buildBody: (serial: string) => unknown,
-): Promise<CallOutcome[]> {
-  return Promise.all(
-    targets.map(async (serial) => {
-      const response = await hppCall({ path, body: buildBody(serial) });
-      const result = response.result as { errorCode?: string; message?: string };
-      return {
-        serial,
-        ok: result?.errorCode === "0",
-        detail: result?.message ?? result?.errorCode ?? "sin respuesta",
-      };
-    }),
+type Trace = {
+  at: string;
+  label: string;
+  path: string;
+  request: unknown;
+  response: unknown;
+};
+
+/** Mensaje de error: primero el de HPP, luego el del proxy. */
+function errorText(response: HppCallResponse) {
+  const result = response.result as { errorCode?: string; message?: string } | undefined;
+  return (
+    result?.message ??
+    result?.errorCode ??
+    response.message ??
+    response.errorCode ??
+    `HTTP ${response.httpStatus ?? "?"}`
   );
 }
 
@@ -65,7 +67,36 @@ export default function AudioPage() {
   const [tts, setTts] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [trace, setTrace] = useState<Trace[]>([]);
   const audioModule = moduleBySlug("audio");
+
+  async function tracked(label: string, path: string, body: unknown) {
+    const response = await hppCall({ path, body });
+    setTrace((prev) => [
+      { at: new Date().toLocaleTimeString(), label, path, request: body, response },
+      ...prev,
+    ].slice(0, 6));
+    return response;
+  }
+
+  async function runOnDevices(
+    label: string,
+    path: string,
+    targets: string[],
+    buildBody: (serial: string) => unknown,
+  ): Promise<CallOutcome[]> {
+    const outcomes: CallOutcome[] = [];
+    for (const serial of targets) {
+      const response = await tracked(`${label} · ${serial}`, path, buildBody(serial));
+      const result = response.result as { errorCode?: string } | undefined;
+      outcomes.push({
+        serial,
+        ok: result?.errorCode === "0",
+        detail: errorText(response),
+      });
+    }
+    return outcomes;
+  }
 
   useEffect(() => {
     if (!file) {
@@ -95,6 +126,16 @@ export default function AudioPage() {
     form.set("audioFile", file);
     try {
       const response = await hppUpload(form);
+      setTrace((prev) => [
+        {
+          at: new Date().toLocaleTimeString(),
+          label: "audio/file/upload",
+          path: "/api/hpcgw/v1/audio/file/upload",
+          request: { fileName, formatType, audioFile: file.name },
+          response,
+        },
+        ...prev,
+      ].slice(0, 6));
       const result = response.result as {
         errorCode?: string;
         message?: string;
@@ -109,7 +150,7 @@ export default function AudioPage() {
         });
         setMessage("Archivo subido. Ahora aplícalo a los altavoces seleccionados.");
       } else {
-        setMessage(`No se pudo subir: ${result?.message ?? result?.errorCode ?? "respuesta inesperada"}`);
+        setMessage(`No se pudo subir: ${errorText(response)}`);
       }
     } finally {
       setBusy(false);
@@ -121,7 +162,7 @@ export default function AudioPage() {
     setBusy(true);
     setMessage("Registrando el audio en los altavoces…");
     try {
-      const outcomes = await runOnDevices("/api/hpcgw/v1/audio/file/add", serials, (serial) => ({
+      const outcomes = await runOnDevices("audio/file/add", "/api/hpcgw/v1/audio/file/add", serials, (serial) => ({
         deviceSerial: serial,
         customAudioInfo: {
           customAudioName: uploaded.name,
@@ -144,22 +185,31 @@ export default function AudioPage() {
     setBusy(true);
     setMessage(`Consultando la biblioteca de ${target}…`);
     try {
-      const response = await hppCall({
-        path: "/api/hpcgw/v1/audio/file/list/get",
-        body: { deviceSerial: target },
-      });
+      const response = await tracked(
+        "audio/file/list/get",
+        "/api/hpcgw/v1/audio/file/list/get",
+        { deviceSerial: target },
+      );
       const result = response.result as {
         errorCode?: string;
-        message?: string;
-        data?: { CustomAudioInfoList?: DeviceAudio[] };
-      };
+        data?: Record<string, unknown>;
+      } | undefined;
       if (result?.errorCode === "0") {
-        const list = result.data?.CustomAudioInfoList ?? [];
+        // Algunos firmwares devuelven la lista con otra capitalización.
+        const data = result.data ?? {};
+        const list = (data.CustomAudioInfoList ??
+          data.customAudioInfoList ??
+          data.customAudioList ??
+          []) as DeviceAudio[];
         setAudios(list);
-        setMessage(`${list.length} audio(s) configurado(s) en ${target}.`);
+        setMessage(
+          list.length
+            ? `${list.length} audio(s) configurado(s) en ${target}.`
+            : `${target} respondió sin audios. Aplica un archivo o revisa el diagnóstico.`,
+        );
       } else {
         setAudios([]);
-        setMessage(`No se pudo consultar ${target}: ${result?.message ?? result?.errorCode ?? "error"}`);
+        setMessage(`No se pudo consultar ${target}: ${errorText(response)}`);
       }
     } finally {
       setBusy(false);
@@ -171,7 +221,7 @@ export default function AudioPage() {
     setBusy(true);
     setMessage("Enviando orden de reproducción…");
     try {
-      const outcomes = await runOnDevices("/api/hpcgw/v1/audio/inter/cut", targets, (serial) => ({
+      const outcomes = await runOnDevices("audio/inter/cut", "/api/hpcgw/v1/audio/inter/cut", targets, (serial) => ({
         deviceSerial: serial,
         audioLevel: 10,
         enabled: true,
@@ -387,6 +437,24 @@ export default function AudioPage() {
           {!serials.length && <p className="desc">Selecciona altavoces en el paso 2.</p>}
         </section>
       </div>
+
+      <details className="advanced-tools" open={trace.length > 0}>
+        <summary>Diagnóstico de las últimas llamadas ({trace.length})</summary>
+        <p className="desc">
+          Petición y respuesta exactas de cada paso. Si la reproducción no suena, aquí verás el
+          errorCode que devolvió el altavoz.
+        </p>
+        {!trace.length && <div className="empty-state compact">Aún no hay llamadas en esta sesión.</div>}
+        {trace.map((entry, index) => (
+          <article className="trace-entry" key={`${entry.at}-${index}`}>
+            <header>
+              <strong>{entry.label}</strong>
+              <small>{entry.at} · {entry.path}</small>
+            </header>
+            <pre className="result">{JSON.stringify({ request: entry.request, response: entry.response }, null, 2)}</pre>
+          </article>
+        ))}
+      </details>
 
       <details className="advanced-tools">
         <summary>Herramientas API avanzadas</summary>
