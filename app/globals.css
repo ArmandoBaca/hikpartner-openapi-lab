@@ -547,6 +547,23 @@ audio { width: 100%; height: 38px; color-scheme: dark; }
   border: 2px solid var(--accent);
 }
 .slider-note { margin-bottom: 12px; font-size: 0.72rem; }
+.playlist-panel { margin-top: 18px; }
+.playlist { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; padding: 0; list-style: none; }
+.playlist li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-in);
+}
+.playlist-index { color: var(--accent); font-weight: 700; text-align: center; }
+.playlist-label { display: flex; min-width: 0; flex-direction: column; }
+.playlist-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
+.playlist-label small { color: var(--muted); font-size: 0.7rem; }
+.playlist-actions { display: flex; gap: 6px; }
+.playlist-actions .btn { padding: 6px 11px; }
 .audio-item .btn-row { margin-top: 0; }
 .op-diagnosis { margin-top: 10px; color: var(--accent-2); }
 .trace-entry { margin-bottom: 12px; }

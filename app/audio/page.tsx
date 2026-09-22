@@ -26,6 +26,16 @@ type DeviceAudio = {
 
 type CallOutcome = { serial: string; ok: boolean; detail: string };
 
+/** Un elemento de la cola: archivo del altavoz o texto sintetizado. */
+type PlaylistItem = {
+  key: string;
+  label: string;
+  entry: { audioSource: "customAudio"; customAudioID: number } | {
+    audioSource: "speechSynthesis";
+    speechSynthesisContent: string;
+  };
+};
+
 type Trace = {
   at: string;
   label: string;
@@ -49,17 +59,24 @@ function sanitizeName(name: string) {
 function buildCutBody(
   serial: string,
   playAudioList: object[],
-  options: { level: number; volume: number; full?: boolean },
+  options: {
+    level: number;
+    volume: number;
+    playMode?: "order" | "loop";
+    playDuration?: number;
+  },
 ) {
   const isTts = playAudioList.some(
     (item) => (item as { audioSource?: string }).audioSource === "speechSynthesis",
   );
+  const loop = options.playMode === "loop";
   return {
     deviceSerial: serial,
     audioLevel: options.level,
     audioVolume: options.volume,
     enabled: true,
-    ...(options.full ? { playMode: "order" } : {}),
+    ...(options.playMode ? { playMode: options.playMode } : {}),
+    ...(loop ? { playDuration: options.playDuration ?? 60 } : {}),
     ...(isTts ? { TTSLanguageType: "spanish", voiceType: "female", pace: 50 } : {}),
     playAudioList,
   };
@@ -145,6 +162,9 @@ export default function AudioPage() {
   const [level, setLevel] = useState(10);
   const [volume, setVolume] = useState(80);
   const [lastPlayed, setLastPlayed] = useState<object[] | null>(null);
+  const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
+  const [playMode, setPlayMode] = useState<"order" | "loop">("order");
+  const [playDuration, setPlayDuration] = useState(60);
   const { devices } = useDevices();
   const audioModule = moduleBySlug("audio");
 
@@ -310,7 +330,12 @@ export default function AudioPage() {
     }
   }
 
-  async function cutIn(targets: string[], playAudioList: object[], action: string) {
+  async function cutIn(
+    targets: string[],
+    playAudioList: object[],
+    action: string,
+    mode: "order" | "loop" = "order",
+  ) {
     if (!targets.length) return;
     setBusy(true);
     setLastPlayed(playAudioList);
@@ -320,12 +345,31 @@ export default function AudioPage() {
         "audio/inter/cut",
         "/api/hpcgw/v1/audio/inter/cut",
         targets,
-        (serial) => buildCutBody(serial, playAudioList, { level, volume, full: true }),
+        (serial) => buildCutBody(serial, playAudioList, {
+          level,
+          volume,
+          playMode: mode,
+          playDuration,
+        }),
       );
       setMessage(`${summarize(outcomes, action)} El sonido sale del altavoz, no del navegador.`);
     } finally {
       setBusy(false);
     }
+  }
+
+  function addToPlaylist(item: Omit<PlaylistItem, "key">) {
+    setPlaylist((prev) => [...prev, { ...item, key: `${Date.now()}-${prev.length}` }]);
+  }
+
+  function movePlaylistItem(index: number, delta: number) {
+    setPlaylist((prev) => {
+      const target = index + delta;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   }
 
   /** enabled:false cancela el cut-in en curso (tabla 3-129). */
@@ -590,6 +634,16 @@ export default function AudioPage() {
                     </button>
                     <button
                       className="btn"
+                      disabled={busy}
+                      onClick={() => addToPlaylist({
+                        label: audio.customAudioName ?? `Audio ${audio.customAudioID}`,
+                        entry: { audioSource: "customAudio", customAudioID: audio.customAudioID },
+                      })}
+                    >
+                      + Lista
+                    </button>
+                    <button
+                      className="btn"
                       disabled={busy || !libraryTarget}
                       title="Reintenta con payloads cada vez más simples para aislar el campo que rechaza el servicio"
                       onClick={() => void probeVariants(
@@ -633,6 +687,19 @@ export default function AudioPage() {
             >
               Emitir en {serials.length || 0} altavoz(ces)
             </button>
+            <button
+              className="btn"
+              disabled={busy || !tts.trim()}
+              onClick={() => {
+                addToPlaylist({
+                  label: `TTS: ${tts.trim().slice(0, 30)}${tts.trim().length > 30 ? "…" : ""}`,
+                  entry: { audioSource: "speechSynthesis", speechSynthesisContent: tts.trim() },
+                });
+                setTts("");
+              }}
+            >
+              + Lista
+            </button>
             {libraryTarget && serials.length > 1 && (
               <button
                 className="btn"
@@ -650,6 +717,126 @@ export default function AudioPage() {
           {!serials.length && <p className="desc">Selecciona altavoces en el paso 2.</p>}
         </section>
       </div>
+
+      <section className="neu playlist-panel">
+        <div className="section-title">
+          <div>
+            <h3>Lista de reproducción</h3>
+            <p className="desc">
+              Una sola orden <code>audio/inter/cut</code> con varios elementos en{" "}
+              <code>playAudioList</code>: el altavoz los encadena en orden. Puedes mezclar archivos
+              y texto a voz.
+            </p>
+          </div>
+          {playlist.length > 0 && (
+            <button className="btn" disabled={busy} onClick={() => setPlaylist([])}>
+              Vaciar
+            </button>
+          )}
+        </div>
+
+        {!playlist.length ? (
+          <div className="empty-state">
+            <strong>La lista está vacía</strong>
+            <span>Usa «+ Lista» en la biblioteca o en el panel de texto a voz.</span>
+          </div>
+        ) : (
+          <ol className="playlist">
+            {playlist.map((item, index) => (
+              <li key={item.key}>
+                <span className="playlist-index">{index + 1}</span>
+                <span className="playlist-label">
+                  <strong>{item.label}</strong>
+                  <small>
+                    {item.entry.audioSource === "customAudio"
+                      ? `customAudio · ID ${item.entry.customAudioID}`
+                      : "speechSynthesis"}
+                  </small>
+                </span>
+                <span className="playlist-actions">
+                  <button className="btn" disabled={index === 0} onClick={() => movePlaylistItem(index, -1)}>↑</button>
+                  <button
+                    className="btn"
+                    disabled={index === playlist.length - 1}
+                    onClick={() => movePlaylistItem(index, 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    className="btn danger"
+                    onClick={() => setPlaylist((prev) => prev.filter((entry) => entry.key !== item.key))}
+                  >
+                    ×
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        <div className="cut-params">
+          <label className="label">
+            Modo
+            <select
+              className="field"
+              value={playMode}
+              onChange={(event) => setPlayMode(event.target.value as "order" | "loop")}
+            >
+              <option value="order">order · reproduce la lista una vez</option>
+              <option value="loop">loop · repite la lista</option>
+            </select>
+          </label>
+          {playMode === "loop" && (
+            <label className="label">
+              <span className="slider-head">Duración del bucle <strong>{playDuration}s</strong></span>
+              <input
+                className="slider"
+                type="range"
+                min={5}
+                max={600}
+                step={5}
+                value={playDuration}
+                onChange={(event) => setPlayDuration(Number(event.target.value))}
+              />
+            </label>
+          )}
+        </div>
+
+        <div className="btn-row">
+          <button
+            className="btn primary"
+            disabled={busy || !playlist.length || !libraryTarget}
+            onClick={() => void cutIn(
+              [libraryTarget],
+              playlist.map((item) => item.entry),
+              "Lista enviada",
+              playMode,
+            )}
+          >
+            Reproducir lista en {libraryTarget || "altavoz"}
+          </button>
+          {serials.length > 1 && playlist.every((item) => item.entry.audioSource === "speechSynthesis") && (
+            <button
+              className="btn"
+              disabled={busy || !playlist.length}
+              onClick={() => void cutIn(
+                serials,
+                playlist.map((item) => item.entry),
+                "Lista enviada",
+                playMode,
+              )}
+            >
+              Reproducir en los {serials.length} altavoces
+            </button>
+          )}
+        </div>
+        {playlist.some((item) => item.entry.audioSource === "customAudio") && serials.length > 1 && (
+          <p className="desc slider-note">
+            La lista incluye archivos, y cada altavoz numera sus audios por separado, así que solo se
+            envía al equipo seleccionado. Una lista con solo texto a voz sí puede ir a todos.
+          </p>
+        )}
+      </section>
 
       <details className="advanced-tools" open={trace.length > 0}>
         <summary>Diagnóstico de las últimas llamadas ({trace.length})</summary>
