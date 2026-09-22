@@ -34,6 +34,17 @@ type Trace = {
   response: unknown;
 };
 
+/** HPP rechaza con VMS050028 cualquier nombre con acentos, espacios o signos. */
+function sanitizeName(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9_-]+/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 60);
+}
+
 /** Los campos de TTS solo aplican cuando la fuente es speechSynthesis. */
 function buildCutBody(
   serial: string,
@@ -133,6 +144,7 @@ export default function AudioPage() {
   const [trace, setTrace] = useState<Trace[]>([]);
   const [level, setLevel] = useState(10);
   const [volume, setVolume] = useState(80);
+  const [lastPlayed, setLastPlayed] = useState<object[] | null>(null);
   const { devices } = useDevices();
   const audioModule = moduleBySlug("audio");
 
@@ -185,13 +197,25 @@ export default function AudioPage() {
     }
   }, [serials, libraryTarget]);
 
+  // La biblioteca se consulta sola al elegir un altavoz.
+  useEffect(() => {
+    if (libraryTarget) void loadLibrary(libraryTarget);
+     
+  }, [libraryTarget]);
+
   async function upload() {
     if (!file) return;
+    const safeName = sanitizeName(fileName);
+    if (!safeName) {
+      setMessage("El nombre queda vacío tras quitar los caracteres especiales. Escribe otro.");
+      return;
+    }
+    if (safeName !== fileName) setFileName(safeName);
     setBusy(true);
     setMessage("Subiendo archivo a Hik-Partner Pro…");
     const form = new FormData();
     form.set("path", "/api/hpcgw/v1/audio/file/upload");
-    form.set("fileName", fileName);
+    form.set("fileName", safeName);
     form.set("formatType", formatType);
     form.set("audioFile", file);
     try {
@@ -289,6 +313,7 @@ export default function AudioPage() {
   async function cutIn(targets: string[], playAudioList: object[], action: string) {
     if (!targets.length) return;
     setBusy(true);
+    setLastPlayed(playAudioList);
     setMessage("Enviando orden de reproducción…");
     try {
       const outcomes = await runOnDevices(
@@ -298,6 +323,31 @@ export default function AudioPage() {
         (serial) => buildCutBody(serial, playAudioList, { level, volume, full: true }),
       );
       setMessage(`${summarize(outcomes, action)} El sonido sale del altavoz, no del navegador.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** enabled:false cancela el cut-in en curso (tabla 3-129). */
+  async function stopPlayback(targets: string[]) {
+    if (!targets.length) return;
+    setBusy(true);
+    setMessage("Enviando orden de parada…");
+    try {
+      const reference = lastPlayed ?? [{ audioSource: "customAudio", customAudioID: audios[0]?.customAudioID ?? 1 }];
+      const outcomes = await runOnDevices(
+        "audio/inter/cut · stop",
+        "/api/hpcgw/v1/audio/inter/cut",
+        targets,
+        (serial) => ({
+          deviceSerial: serial,
+          audioLevel: level,
+          audioVolume: volume,
+          enabled: false,
+          playAudioList: reference,
+        }),
+      );
+      setMessage(summarize(outcomes, "Parada enviada"));
     } finally {
       setBusy(false);
     }
@@ -361,7 +411,7 @@ export default function AudioPage() {
                 const selected = event.target.files?.[0] ?? null;
                 setFile(selected);
                 if (selected) {
-                  setFileName(selected.name.replace(/\.[^.]+$/, ""));
+                  setFileName(sanitizeName(selected.name.replace(/\.[^.]+$/, "")));
                   setFormatType(selected.name.split(".").pop()?.toLowerCase() ?? "mp3");
                 }
               }}
@@ -371,6 +421,12 @@ export default function AudioPage() {
             Nombre en HPP
             <input className="field" value={fileName} onChange={(event) => setFileName(event.target.value)} />
           </label>
+          {sanitizeName(fileName) !== fileName && (
+            <p className="desc slider-note">
+              Se enviará como <code>{sanitizeName(fileName) || "(vacío)"}</code>: HPP rechaza acentos,
+              espacios y signos con VMS050028.
+            </p>
+          )}
           {localUrl && (
             <div className="browser-preview">
               <span>Vista previa en este navegador</span>
@@ -459,27 +515,45 @@ export default function AudioPage() {
           </div>
           <div className="cut-params">
             <label className="label">
-              Prioridad (audioLevel 0-15)
+              <span className="slider-head">Volumen <strong>{volume}</strong></span>
               <input
-                className="field"
-                type="number"
-                min={0}
-                max={15}
-                value={level}
-                onChange={(event) => setLevel(Number(event.target.value))}
-              />
-            </label>
-            <label className="label">
-              Volumen (0-100)
-              <input
-                className="field"
-                type="number"
+                className="slider"
+                type="range"
                 min={0}
                 max={100}
                 value={volume}
                 onChange={(event) => setVolume(Number(event.target.value))}
               />
             </label>
+            <label className="label">
+              <span className="slider-head">Prioridad <strong>{level}</strong></span>
+              <input
+                className="slider"
+                type="range"
+                min={0}
+                max={15}
+                value={level}
+                onChange={(event) => setLevel(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <p className="desc slider-note">
+            El volumen viaja dentro de cada orden de reproducción: se fija al enviarla y no cambia el
+            audio que ya está sonando. Para subirlo o bajarlo, mueve la barra y vuelve a reproducir.
+          </p>
+          <div className="btn-row">
+            <button
+              className="btn danger"
+              disabled={busy || !libraryTarget}
+              onClick={() => void stopPlayback([libraryTarget])}
+            >
+              Detener en {libraryTarget || "altavoz"}
+            </button>
+            {serials.length > 1 && (
+              <button className="btn" disabled={busy} onClick={() => void stopPlayback(serials)}>
+                Detener en todos
+              </button>
+            )}
           </div>
           <div className="audio-library">
             {!audios.length && (

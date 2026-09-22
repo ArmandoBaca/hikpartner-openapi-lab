@@ -39,6 +39,7 @@ export const ERROR_CODES: Record<string, string> = {
   LAP068002: "No se pudieron obtener las alarmas.",
   VMS022554: "Los recursos físicos no existen.",
   VMS050020: "Error del servicio de vídeo (convergence-vms-video). No está documentado en el apéndice A.1.",
+  VMS050028: "El nombre del archivo de audio tiene caracteres especiales.",
   VMS050034: "Dispositivo vinculado no encontrado.",
   EVZ10001: "Parámetro incorrecto.",
   EVZ10006: "La dirección IP está restringida.",
@@ -80,6 +81,8 @@ const AUDIO_HINTS: Record<string, string> = {
   LAP000001: "Algún campo del cuerpo va fuera de rango o falta un obligatorio.",
   VMS050020:
     "El backend acepta la petición pero el altavoz no ejecuta el cut-in: suele ser un equipo sin la función habilitada, sin licencia de audio o con el firmware desactualizado. Usa «Probar variantes» para descartar el payload.",
+  VMS050028:
+    "Usa solo letras sin acentos, números, guion y guion bajo en el nombre; nada de espacios, tildes, ñ, paréntesis o signos.",
 };
 
 export function explainError(code?: string, context?: "audio") {
