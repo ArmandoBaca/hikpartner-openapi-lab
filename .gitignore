@@ -5,4 +5,4 @@ out
 *.log
 *.tsbuildinfo
 .env*
-docs/_extracted.txt
+docs/_*.txt
