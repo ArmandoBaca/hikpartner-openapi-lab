@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { SerialField } from "@/components/DevicePicker";
 import type { Operation } from "@/lib/operations";
 import { hppCall } from "@/lib/client";
+import { explainError } from "@/lib/errors";
 
 function parseMaybeJson(value: string) {
   const trimmed = value.trim();
@@ -20,6 +21,7 @@ export function OperationCard({ op }: { op: Operation }) {
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<string>("");
   const [ok, setOk] = useState<boolean | null>(null);
+  const [diagnosis, setDiagnosis] = useState("");
 
   const path = useMemo(() => {
     let p = op.path;
@@ -60,10 +62,13 @@ export function OperationCard({ op }: { op: Operation }) {
         contentType: op.contentType,
       });
       const result = res.result as { errorCode?: string } | undefined;
+      const code = result?.errorCode ?? res.errorCode;
       setOk(String(result?.errorCode ?? "") === "0" || res.httpStatus === 200);
+      setDiagnosis(code && code !== "0" ? `${code} · ${explainError(code)}` : "");
       setOut(JSON.stringify(res, null, 2));
     } catch (error) {
       setOk(false);
+      setDiagnosis("");
       setOut(error instanceof Error ? error.message : "Error");
     } finally {
       setBusy(false);
@@ -134,6 +139,7 @@ export function OperationCard({ op }: { op: Operation }) {
         {ok === true && <span className="chip ok">errorCode 0</span>}
         {ok === false && <span className="chip bad">falló</span>}
       </div>
+      {diagnosis && <p className="desc op-diagnosis">{diagnosis}</p>}
       {out && <pre className="result">{out}</pre>}
     </article>
   );

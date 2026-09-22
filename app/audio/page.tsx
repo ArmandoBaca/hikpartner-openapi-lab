@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DevicePicker, isSpeaker } from "@/components/DevicePicker";
+import { DevicePicker } from "@/components/DevicePicker";
 import { OpsGrid } from "@/components/OperationCard";
 import { hppCall, hppUpload, type HppCallResponse } from "@/lib/client";
+import { categoryLabel, isSpeaker, useDevices } from "@/lib/devices";
+import { explainError } from "@/lib/errors";
 import { moduleBySlug } from "@/lib/operations";
 
 type UploadedAudio = {
@@ -32,16 +34,18 @@ type Trace = {
   response: unknown;
 };
 
-/** Mensaje de error: primero el de HPP, luego el del proxy. */
+function errorCodeOf(response: HppCallResponse) {
+  const result = response.result as { errorCode?: string } | undefined;
+  return result?.errorCode ?? response.errorCode;
+}
+
+/** Mensaje de error: código de HPP, su traducción y el texto original. */
 function errorText(response: HppCallResponse) {
   const result = response.result as { errorCode?: string; message?: string } | undefined;
-  return (
-    result?.message ??
-    result?.errorCode ??
-    response.message ??
-    response.errorCode ??
-    `HTTP ${response.httpStatus ?? "?"}`
-  );
+  const code = errorCodeOf(response);
+  const explanation = explainError(code, "audio");
+  const raw = result?.message ?? response.message;
+  return [code, explanation || raw].filter(Boolean).join(" · ") || `HTTP ${response.httpStatus ?? "?"}`;
 }
 
 function summarize(outcomes: CallOutcome[], action: string) {
@@ -68,7 +72,12 @@ export default function AudioPage() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [trace, setTrace] = useState<Trace[]>([]);
+  const { devices } = useDevices();
   const audioModule = moduleBySlug("audio");
+
+  const notSpeakers = serials
+    .map((serial) => devices.find((device) => device.deviceSerial === serial))
+    .filter((device) => device && !isSpeaker(device));
 
   async function tracked(label: string, path: string, body: unknown) {
     const response = await hppCall({ path, body });
@@ -324,6 +333,15 @@ export default function AudioPage() {
           </div>
         </article>
       </section>
+
+      {notSpeakers.length > 0 && (
+        <div className="note audio-warning">
+          <strong>Estos equipos no son IP Speaker:</strong>{" "}
+          {notSpeakers.map((device) => `${device?.deviceSerial} (${categoryLabel(device!)})`).join(", ")}.
+          Las APIs de audio solo funcionan en categoría 12 / subtipo 19, así que devolverán
+          EVZ20015 o EVZ60020.
+        </div>
+      )}
 
       {message && <div className="dashboard-status audio-status">{message}</div>}
 

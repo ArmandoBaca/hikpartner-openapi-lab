@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useDevices, type HppDevice } from "@/lib/devices";
+import { categoryLabel, useDevices, type HppDevice } from "@/lib/devices";
 
 export { isSpeaker } from "@/lib/devices";
 export type { HppDevice };
@@ -115,7 +115,7 @@ export function DevicePicker({
               <span>
                 <strong>{device.deviceName || serial}</strong>
                 <small>
-                  {serial} · {device.deviceType ?? "modelo n/d"}
+                  {serial} · {device.deviceType ?? "modelo n/d"} · {categoryLabel(device)}
                   {compatible ? "" : " · no compatible"}
                 </small>
               </span>
