@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SerialField } from "@/components/DevicePicker";
 import { ISAPI_TEMPLATES, OTAP_TEMPLATES } from "@/lib/catalog";
 import { hppCall } from "@/lib/client";
 
@@ -66,7 +67,7 @@ export default function TransparentePage() {
         <h3>Consola</h3>
         <label className="label">
           Serial (X-Devserial)
-          <input className="field" value={serial} onChange={(e) => setSerial(e.target.value)} />
+          <SerialField value={serial} onChange={setSerial} />
         </label>
         <div className="grid two">
           <label className="label">

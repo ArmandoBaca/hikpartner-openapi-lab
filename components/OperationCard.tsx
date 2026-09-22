@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SerialField } from "@/components/DevicePicker";
 import type { Operation } from "@/lib/operations";
 import { hppCall } from "@/lib/client";
 
@@ -76,11 +77,18 @@ export function OperationCard({ op }: { op: Operation }) {
       {(op.pathParams ?? []).map((param) => (
         <label key={param} className="label">
           Path {param}
-          <input
-            className="field"
-            value={pathValues[param] ?? ""}
-            onChange={(e) => setPathValues((s) => ({ ...s, [param]: e.target.value }))}
-          />
+          {param === "deviceSerial" ? (
+            <SerialField
+              value={pathValues[param] ?? ""}
+              onChange={(serial) => setPathValues((s) => ({ ...s, [param]: serial }))}
+            />
+          ) : (
+            <input
+              className="field"
+              value={pathValues[param] ?? ""}
+              onChange={(e) => setPathValues((s) => ({ ...s, [param]: e.target.value }))}
+            />
+          )}
         </label>
       ))}
       {(op.fields ?? []).map((field) => (
@@ -95,6 +103,12 @@ export function OperationCard({ op }: { op: Operation }) {
               <option value="true">true</option>
               <option value="false">false</option>
             </select>
+          ) : field.type === "text" && field.name === "deviceSerial" ? (
+            <SerialField
+              value={values[field.name] ?? ""}
+              onChange={(serial) => setValues((s) => ({ ...s, [field.name]: serial }))}
+              placeholder={field.placeholder}
+            />
           ) : field.type === "json" || field.type === "textarea" ? (
             <textarea
               className="field"

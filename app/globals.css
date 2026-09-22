@@ -448,6 +448,61 @@ audio { width: 100%; height: 38px; color-scheme: dark; }
 }
 .audio-item > div { display: flex; min-width: 0; flex-direction: column; }
 .audio-item small { color: var(--muted); font-size: 0.7rem; }
+.library-target { display: flex; gap: 8px; align-items: center; }
+.library-target .field { width: auto; min-width: 150px; margin: 0; }
+.picker { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.picker-head { display: flex; gap: 8px; }
+.picker-head .field { margin: 0; }
+.picker-filter { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 0.75rem; }
+.picker-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.picker-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  cursor: pointer;
+  border-radius: 11px;
+  padding: 6px 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-out);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.picker-list {
+  display: flex;
+  max-height: 230px;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-in);
+}
+.picker-option {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  cursor: pointer;
+  border-radius: 11px;
+  padding: 9px 11px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+.picker-option:hover { box-shadow: var(--shadow-out); }
+.picker-option.active { box-shadow: var(--shadow-out); color: var(--accent); }
+.picker-option > span:nth-child(2) { display: flex; min-width: 0; flex-direction: column; }
+.picker-option strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.83rem; }
+.picker-option small { color: var(--muted); font-size: 0.7rem; }
+.picker-mark { color: var(--accent); font-weight: 700; }
+.picker-manual { display: flex; gap: 8px; }
+.picker-manual .field { margin: 0; }
+.picker-hint { font-size: 0.72rem; }
+.serial-field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: 8px; }
+.serial-field select.field { text-overflow: ellipsis; }
 .advanced-tools { margin-top: 22px; }
 .advanced-tools > summary {
   cursor: pointer;
