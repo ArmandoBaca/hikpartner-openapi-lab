@@ -504,6 +504,8 @@ audio { width: 100%; height: 38px; color-scheme: dark; }
 .serial-field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: 8px; }
 .serial-field select.field { text-overflow: ellipsis; }
 .audio-warning { margin-top: 18px; border-left: 3px solid var(--accent-2); }
+.cut-params { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.audio-item .btn-row { margin-top: 0; }
 .op-diagnosis { margin-top: 10px; color: var(--accent-2); }
 .trace-entry { margin-bottom: 12px; }
 .trace-entry header { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 6px; }

@@ -34,6 +34,65 @@ type Trace = {
   response: unknown;
 };
 
+/** Los campos de TTS solo aplican cuando la fuente es speechSynthesis. */
+function buildCutBody(
+  serial: string,
+  playAudioList: object[],
+  options: { level: number; volume: number; full?: boolean },
+) {
+  const isTts = playAudioList.some(
+    (item) => (item as { audioSource?: string }).audioSource === "speechSynthesis",
+  );
+  return {
+    deviceSerial: serial,
+    audioLevel: options.level,
+    audioVolume: options.volume,
+    enabled: true,
+    ...(options.full ? { playMode: "order" } : {}),
+    ...(isTts ? { TTSLanguageType: "spanish", voiceType: "female", pace: 50 } : {}),
+    playAudioList,
+  };
+}
+
+const CUT_VARIANTS: Array<{ label: string; build: (serial: string, list: object[]) => unknown }> = [
+  {
+    label: "solo obligatorios",
+    build: (serial, list) => ({ deviceSerial: serial, audioLevel: 10, audioVolume: 80, playAudioList: list }),
+  },
+  {
+    label: "obligatorios + enabled",
+    build: (serial, list) => ({
+      deviceSerial: serial, audioLevel: 10, audioVolume: 80, enabled: true, playAudioList: list,
+    }),
+  },
+  {
+    label: "playMode order",
+    build: (serial, list) => ({
+      deviceSerial: serial, audioLevel: 10, audioVolume: 80, enabled: true, playMode: "order", playAudioList: list,
+    }),
+  },
+  {
+    label: "playMode loop + playDuration 10",
+    build: (serial, list) => ({
+      deviceSerial: serial, audioLevel: 10, audioVolume: 80, enabled: true,
+      playMode: "loop", playDuration: 10, playAudioList: list,
+    }),
+  },
+  {
+    label: "prioridad 15 y volumen 100",
+    build: (serial, list) => ({
+      deviceSerial: serial, audioLevel: 15, audioVolume: 100, enabled: true, playAudioList: list,
+    }),
+  },
+  {
+    label: "payload completo con TTS",
+    build: (serial, list) => ({
+      deviceSerial: serial, audioLevel: 10, audioVolume: 80, enabled: true, playMode: "order",
+      TTSLanguageType: "spanish", voiceType: "female", pace: 50, playAudioList: list,
+    }),
+  },
+];
+
 function errorCodeOf(response: HppCallResponse) {
   const result = response.result as { errorCode?: string } | undefined;
   return result?.errorCode ?? response.errorCode;
@@ -72,6 +131,8 @@ export default function AudioPage() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [trace, setTrace] = useState<Trace[]>([]);
+  const [level, setLevel] = useState(10);
+  const [volume, setVolume] = useState(80);
   const { devices } = useDevices();
   const audioModule = moduleBySlug("audio");
 
@@ -230,18 +291,42 @@ export default function AudioPage() {
     setBusy(true);
     setMessage("Enviando orden de reproducción…");
     try {
-      const outcomes = await runOnDevices("audio/inter/cut", "/api/hpcgw/v1/audio/inter/cut", targets, (serial) => ({
-        deviceSerial: serial,
-        audioLevel: 10,
-        enabled: true,
-        playMode: "order",
-        audioVolume: 80,
-        TTSLanguageType: "spanish",
-        voiceType: "female",
-        pace: 50,
-        playAudioList,
-      }));
+      const outcomes = await runOnDevices(
+        "audio/inter/cut",
+        "/api/hpcgw/v1/audio/inter/cut",
+        targets,
+        (serial) => buildCutBody(serial, playAudioList, { level, volume, full: true }),
+      );
       setMessage(`${summarize(outcomes, action)} El sonido sale del altavoz, no del navegador.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Recorre payloads cada vez más simples para aislar qué campo rechaza el servicio. */
+  async function probeVariants(playAudioList: object[]) {
+    if (!libraryTarget) return;
+    setBusy(true);
+    const failures: string[] = [];
+    try {
+      for (const variant of CUT_VARIANTS) {
+        setMessage(`Probando variante: ${variant.label}…`);
+        const response = await tracked(
+          `variante · ${variant.label}`,
+          "/api/hpcgw/v1/audio/inter/cut",
+          variant.build(libraryTarget, playAudioList),
+        );
+        const code = errorCodeOf(response);
+        if (code === "0") {
+          setMessage(`Funcionó la variante «${variant.label}». Ese es el payload que acepta ${libraryTarget}.`);
+          return;
+        }
+        failures.push(`${variant.label} → ${code ?? "sin código"}`);
+      }
+      setMessage(
+        `Ninguna variante funcionó en ${libraryTarget}: ${failures.join(" · ")}. ` +
+          "El rechazo no viene del formato del cuerpo.",
+      );
     } finally {
       setBusy(false);
     }
@@ -372,6 +457,30 @@ export default function AudioPage() {
               </button>
             </div>
           </div>
+          <div className="cut-params">
+            <label className="label">
+              Prioridad (audioLevel 0-15)
+              <input
+                className="field"
+                type="number"
+                min={0}
+                max={15}
+                value={level}
+                onChange={(event) => setLevel(Number(event.target.value))}
+              />
+            </label>
+            <label className="label">
+              Volumen (0-100)
+              <input
+                className="field"
+                type="number"
+                min={0}
+                max={100}
+                value={volume}
+                onChange={(event) => setVolume(Number(event.target.value))}
+              />
+            </label>
+          </div>
           <div className="audio-library">
             {!audios.length && (
               <div className="empty-state">
@@ -393,17 +502,29 @@ export default function AudioPage() {
                     </small>
                   </div>
                   {previewUrl && <audio controls preload="none" src={previewUrl} />}
-                  <button
-                    className="btn primary"
-                    disabled={busy || !libraryTarget}
-                    onClick={() => void cutIn(
-                      [libraryTarget],
-                      [{ audioSource: "customAudio", customAudioID: audio.customAudioID }],
-                      "Reproducción aceptada",
-                    )}
-                  >
-                    Reproducir en {libraryTarget || "altavoz"}
-                  </button>
+                  <div className="btn-row">
+                    <button
+                      className="btn primary"
+                      disabled={busy || !libraryTarget}
+                      onClick={() => void cutIn(
+                        [libraryTarget],
+                        [{ audioSource: "customAudio", customAudioID: audio.customAudioID }],
+                        "Reproducción aceptada",
+                      )}
+                    >
+                      Reproducir
+                    </button>
+                    <button
+                      className="btn"
+                      disabled={busy || !libraryTarget}
+                      title="Reintenta con payloads cada vez más simples para aislar el campo que rechaza el servicio"
+                      onClick={() => void probeVariants(
+                        [{ audioSource: "customAudio", customAudioID: audio.customAudioID }],
+                      )}
+                    >
+                      Probar variantes
+                    </button>
+                  </div>
                 </article>
               );
             })}
