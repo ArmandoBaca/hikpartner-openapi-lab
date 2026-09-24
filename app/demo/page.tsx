@@ -266,7 +266,7 @@ export default function ControlTowerPage() {
       </section>
 
       {(deviceError || siteError) && (
-        <div className="note audio-warning">{deviceError || siteError}</div>
+        <div className="note error">{deviceError || siteError}</div>
       )}
 
       <section className="metric-grid tower-metrics">
