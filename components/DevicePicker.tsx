@@ -182,3 +182,75 @@ export function SerialField({
     </div>
   );
 }
+
+/** Campo de ID interno (no serial), usado por operaciones como device/delete. */
+export function DeviceIdField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const { devices, loading } = useDevices();
+  return (
+    <div className="serial-field">
+      <input
+        className="field"
+        value={value}
+        placeholder="ID interno del dispositivo"
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <select
+        className="field"
+        value={devices.some((device) => device.id === value) ? value : ""}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">{loading ? "Cargando…" : `Inventario (${devices.length})`}</option>
+        {devices.map((device) => (
+          <option key={device.id ?? device.deviceSerial} value={device.id ?? ""}>
+            {device.deviceName || device.deviceSerial} · {device.deviceSerial}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/** Selector múltiple que mantiene el valor como JSON para operaciones deviceSerialList/deviceSerials. */
+export function MultiSerialField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (json: string) => void;
+}) {
+  let selected: string[] = [];
+  try {
+    const parsed = JSON.parse(value || "[]");
+    if (Array.isArray(parsed)) selected = parsed.filter((item): item is string => typeof item === "string");
+  } catch {
+    // Conserva la edición manual inválida hasta que el usuario use el selector.
+  }
+
+  return (
+    <div className="multi-serial-field">
+      <textarea
+        className="field"
+        value={value}
+        placeholder='["SERIAL1","SERIAL2"]'
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <details>
+        <summary>
+          Elegir del inventario
+          <span>{selected.length ? `${selected.length} seleccionado(s)` : "ninguno"}</span>
+        </summary>
+        <DevicePicker
+          selected={selected}
+          onChange={(serials) => onChange(JSON.stringify(serials))}
+          hint="Puedes elegir uno, varios o limpiar la selección. El JSON se completa automáticamente."
+        />
+      </details>
+    </div>
+  );
+}

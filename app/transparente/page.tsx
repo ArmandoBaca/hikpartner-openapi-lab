@@ -81,7 +81,10 @@ export default function TransparentePage() {
         </div>
         <label className="label">
           X-Userlevel
-          <input className="field" value={userlevel} onChange={(e) => setUserlevel(e.target.value)} />
+          <select className="field" value={userlevel} onChange={(e) => setUserlevel(e.target.value)}>
+            <option value="0">0 · Instalador</option>
+            <option value="1">1 · Administrador del dispositivo</option>
+          </select>
         </label>
         <div className="grid two">
           <label className="label">
@@ -122,6 +125,7 @@ export default function TransparentePage() {
       <div className="grid two">
         <section className="neu">
           <h3>Plantillas ISAPI A.5</h3>
+          <p className="desc">Selecciona una para rellenar método, URI, Content-Type y body automáticamente.</p>
           <div className="btn-row">
             {ISAPI_TEMPLATES.map((t) => (
               <button key={t.name} className="btn" onClick={() => applyIsapi(t)}>
@@ -132,6 +136,7 @@ export default function TransparentePage() {
         </section>
         <section className="neu">
           <h3>Plantillas OTAP</h3>
+          <p className="desc">Acciones y propiedades estructuradas para dispositivos compatibles con OTAP v2.</p>
           <div className="btn-row">
             {OTAP_TEMPLATES.map((t) => (
               <button key={t.name} className="btn" onClick={() => applyOtap(t)}>

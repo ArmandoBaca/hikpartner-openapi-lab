@@ -8,6 +8,7 @@ export type HppDevice = {
   deviceName?: string;
   deviceSerial?: string;
   deviceOnlineStatus?: number;
+  healthStatus?: string;
   deviceCategory?: number;
   deviceSubCategory?: number;
   deviceType?: string;
@@ -78,21 +79,42 @@ export function categoryLabel(device: HppDevice) {
 
 export function fetchDevices(force = false): Promise<DeviceFetch> {
   if (!pending || force) {
-    pending = hppCall({ path: "/api/hpcgw/v1/device/list", body: { page: 1, pageSize: 100 } })
-      .then((response) => {
+    pending = (async () => {
+      try {
+        const first = await hppCall({
+          path: "/api/hpcgw/v1/device/list",
+          body: { page: 1, pageSize: 100 },
+        });
+        const response = first;
         const result = response.result as {
           errorCode?: string;
           message?: string;
-          data?: { rows?: HppDevice[] };
+          data?: { rows?: HppDevice[]; totalPage?: number };
         } | undefined;
         if (result?.errorCode === "0") {
-          return { devices: result.data?.rows ?? [], error: "" };
+          const devices = [...(result.data?.rows ?? [])];
+          const totalPage = Math.min(result.data?.totalPage ?? 1, 50);
+          for (let page = 2; page <= totalPage; page += 1) {
+            const next = await hppCall({
+              path: "/api/hpcgw/v1/device/list",
+              body: { page, pageSize: 100 },
+            });
+            const nextResult = next.result as {
+              errorCode?: string;
+              data?: { rows?: HppDevice[] };
+            } | undefined;
+            if (nextResult?.errorCode !== "0") break;
+            devices.push(...(nextResult.data?.rows ?? []));
+          }
+          return { devices, error: "" };
         }
         const detail =
           result?.message ?? result?.errorCode ?? response.message ?? response.errorCode;
         return { devices: [], error: detail ?? "No se pudo leer el inventario" };
-      })
-      .catch(() => ({ devices: [], error: "Error de red al consultar dispositivos" }));
+      } catch {
+        return { devices: [], error: "Error de red al consultar dispositivos" };
+      }
+    })();
   }
   return pending;
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EVENT_TYPES } from "@/lib/catalog";
 import { hppCall } from "@/lib/client";
+import { fetchDevices } from "@/lib/devices";
 
 type Device = {
   id?: string;
@@ -56,6 +57,7 @@ export default function DashboardPage() {
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("Monitor detenido");
   const [filter, setFilter] = useState("all");
+  const [deviceFilter, setDeviceFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const stop = useRef(false);
 
@@ -63,15 +65,15 @@ export default function DashboardPage() {
     stop.current = true;
   }, []);
 
+  useEffect(() => {
+    void refreshDevices();
+  }, []);
+
   async function refreshDevices() {
     setLoading(true);
     try {
-      const response = await hppCall({
-        path: "/api/hpcgw/v1/device/list",
-        body: { page: 1, pageSize: 100 },
-      });
-      const result = response.result as { data?: { rows?: Device[] }; errorCode?: string };
-      if (result?.errorCode === "0") setDevices(result.data?.rows ?? []);
+      const result = await fetchDevices(true);
+      if (!result.error) setDevices(result.devices);
     } finally {
       setLoading(false);
     }
@@ -147,8 +149,11 @@ export default function DashboardPage() {
   }
 
   const visibleEvents = useMemo(
-    () => filter === "all" ? events : events.filter((item) => severity(item.type) === filter),
-    [events, filter],
+    () => events.filter((item) => (
+      (filter === "all" || severity(item.type) === filter) &&
+      (deviceFilter === "all" || item.serial === deviceFilter)
+    )),
+    [events, filter, deviceFilter],
   );
   const online = devices.filter((item) => item.deviceOnlineStatus === 1).length;
   const faults = devices.filter((item) => item.healthStatus === "fault").length;
@@ -228,11 +233,26 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
+          <label className="event-device-filter">
+            <span>Mostrar eventos de</span>
+            <select className="field" value={deviceFilter} onChange={(event) => setDeviceFilter(event.target.value)}>
+              <option value="all">Todos los dispositivos</option>
+              {devices.map((device) => (
+                <option key={device.id ?? device.deviceSerial} value={device.deviceSerial}>
+                  {device.deviceName ?? device.deviceSerial} · {device.deviceSerial}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="event-list">
             {!visibleEvents.length && (
               <div className="empty-state">
                 <strong>Sin actividad</strong>
-                <span>Inicia el monitoreo para recibir eventos de todos los dispositivos.</span>
+                <span>
+                  {events.length
+                    ? "No hay eventos que coincidan con los filtros actuales."
+                    : "Inicia el monitoreo para recibir eventos de todos los dispositivos."}
+                </span>
               </div>
             )}
             {visibleEvents.map((item) => (

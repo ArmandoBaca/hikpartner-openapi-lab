@@ -40,6 +40,7 @@ const sections = [
     purpose: "Recibe el flujo original y permite acciones específicas de seguridad.",
     steps: [
       "El Dashboard es la vista recomendada para observar todo. Alarmas conserva herramientas avanzadas.",
+      "En Alarmas elige Todos los dispositivos o una selección del inventario antes de iniciar el muro.",
       "Puedes armar, armar en silencio o desarmar paneles compatibles.",
       "Para adjuntos ISAPI_FILES, pega filePath y solicita una URL temporal de la imagen.",
       "No abras Dashboard y Alarmas monitoreando a la vez: ambos consumen la misma cola de la cuenta.",
@@ -58,6 +59,7 @@ const sections = [
       "Reproducir en altavoz usa audio/inter/cut: es una orden remota; el sonido sale del altavoz, no del navegador.",
       "Como el customAudioID cambia por equipo, la biblioteca y su botón de reproducir trabajan sobre un altavoz a la vez.",
       "TTS no depende de IDs, así que puede emitirse en todos los altavoces seleccionados de una sola vez.",
+      "La lista de reproducción encadena archivos y TTS; order reproduce una vez y loop repite durante el tiempo elegido.",
     ],
     link: ["/audio", "Abrir Audio"],
   },

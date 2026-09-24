@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NAV } from "@/lib/catalog";
 import { loadSession, type SessionInfo } from "@/lib/client";
+import { PAGE_GUIDES } from "@/lib/guides";
+import { PageGuide } from "./PageGuide";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function Shell({
@@ -56,7 +58,10 @@ export function Shell({
           )}
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        <PageGuide guide={PAGE_GUIDES[pathname]} />
+        {children}
+      </main>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { DevicePicker } from "@/components/DevicePicker";
 import { ModulePage } from "@/components/ModulePage";
-import { EVENT_TYPES } from "@/lib/catalog";
 import { hppCall } from "@/lib/client";
 
 type AlarmItem = {
@@ -32,6 +32,8 @@ function AlarmWall() {
   const [status, setStatus] = useState("Parado");
   const [picturePath, setPicturePath] = useState("");
   const [pictureOut, setPictureOut] = useState("");
+  const [scope, setScope] = useState<"all" | "list">("all");
+  const [selectedSerials, setSelectedSerials] = useState<string[]>([]);
   const stop = useRef(false);
 
   useEffect(() => {
@@ -41,13 +43,28 @@ function AlarmWall() {
   }, []);
 
   async function loop() {
+    if (scope === "list" && !selectedSerials.length) {
+      setStatus("Selecciona al menos un dispositivo");
+      return;
+    }
     stop.current = false;
     setRunning(true);
-    setStatus("Suscribiendo all…");
-    await hppCall({
+    const subscriptionBody = {
+      subType: 1,
+      subMode: scope,
+      ...(scope === "list" ? { deviceSerialList: selectedSerials } : {}),
+    };
+    setStatus(scope === "all" ? "Suscribiendo todos los dispositivos…" : `Suscribiendo ${selectedSerials.length} dispositivo(s)…`);
+    const subscription = await hppCall({
       path: "/api/hpcgw/v1/mq/subscribe",
-      body: { subType: 1, subMode: "all" },
+      body: subscriptionBody,
     });
+    const subscriptionResult = subscription.result as { errorCode?: string; message?: string } | undefined;
+    if (subscriptionResult?.errorCode !== "0") {
+      setStatus(`No se pudo suscribir: ${subscriptionResult?.message ?? subscriptionResult?.errorCode ?? "error"}`);
+      setRunning(false);
+      return;
+    }
     while (!stop.current) {
       setStatus("Esperando mq/messages (~20 s)…");
       const res = await hppCall({
@@ -92,25 +109,80 @@ function AlarmWall() {
     setStatus("Parado");
   }
 
+  async function stopMonitor() {
+    stop.current = true;
+    setRunning(false);
+    setStatus("Deteniendo y cancelando suscripción…");
+    const body = {
+      subType: 0,
+      subMode: scope,
+      ...(scope === "list" ? { deviceSerialList: selectedSerials } : {}),
+    };
+    const response = await hppCall({ path: "/api/hpcgw/v1/mq/subscribe", body });
+    const result = response.result as { errorCode?: string; message?: string } | undefined;
+    setStatus(result?.errorCode === "0" ? "Monitor y suscripción detenidos" : `Monitor detenido · ${result?.message ?? result?.errorCode ?? "sin confirmar baja"}`);
+  }
+
   return (
     <>
       <section className="neu" style={{ marginBottom: 18 }}>
-        <h3>Muro de alarmas</h3>
-        <p className="desc">
-          Long-poll desde este navegador. Caché de plataforma ~2 h. Tipos A.4: {EVENT_TYPES.map((e) => e.type).join(", ")}.
-        </p>
-        <div className="btn-row">
-          <button className="btn primary" disabled={running} onClick={() => void loop()}>
-            Iniciar muro
-          </button>
+        <div className="section-title">
+          <div>
+            <h3>Muro de alarmas</h3>
+            <p className="desc">
+              Elige si HPP debe enviar eventos de toda la cuenta o solo de equipos concretos.
+            </p>
+          </div>
+          <span className={`chip ${running ? "ok" : ""}`}>{running ? "escuchando" : "detenido"}</span>
+        </div>
+        <div className="scope-picker">
           <button
-            className="btn danger"
+            className={scope === "all" ? "active" : ""}
+            disabled={running}
             onClick={() => {
-              stop.current = true;
-              setRunning(false);
+              setScope("all");
+              setItems([]);
             }}
           >
+            <strong>Todos los dispositivos</strong>
+            <span>Recomendado para el centro de monitoreo</span>
+          </button>
+          <button
+            className={scope === "list" ? "active" : ""}
+            disabled={running}
+            onClick={() => {
+              setScope("list");
+              setItems([]);
+            }}
+          >
+            <strong>Elegir dispositivos</strong>
+            <span>Pruebas dirigidas o investigación puntual</span>
+          </button>
+        </div>
+        {scope === "list" && (
+          <DevicePicker
+            selected={selectedSerials}
+            onChange={setSelectedSerials}
+            hint="La suscripción se limitará a estos seriales. Puedes elegir uno o varios."
+          />
+        )}
+        <p className="desc">
+          Alcance actual: <strong>{scope === "all" ? "todos los dispositivos" : `${selectedSerials.length} seleccionado(s)`}</strong>.
+          Long-poll desde este navegador; caché de plataforma ~2 h.
+        </p>
+        <div className="btn-row">
+          <button
+            className="btn primary"
+            disabled={running || (scope === "list" && !selectedSerials.length)}
+            onClick={() => void loop()}
+          >
+            Iniciar muro
+          </button>
+          <button className="btn danger" disabled={!running} onClick={() => void stopMonitor()}>
             Detener
+          </button>
+          <button className="btn" disabled={!items.length} onClick={() => setItems([])}>
+            Limpiar ({items.length})
           </button>
           <span className="chip">{status}</span>
         </div>
@@ -123,7 +195,7 @@ function AlarmWall() {
                 <span>{item.at}</span>
               </header>
               <div className="serial">
-                {item.deviceSerial} · {item.formatType}
+                {item.deviceSerial || "Sin serial"} · {item.formatType}
               </div>
               <pre className="result">
                 {typeof item.alarmData === "string" ? item.alarmData : JSON.stringify(item.alarmData, null, 2)}
@@ -134,6 +206,10 @@ function AlarmWall() {
       </section>
       <section className="neu" style={{ marginBottom: 18 }}>
         <h3>Resolver foto ISAPI_FILES</h3>
+        <p className="desc">
+          Úsalo cuando el payload de una alarma contenga un <code>filePath</code> que empiece por
+          ISAPI_FILES. HPP devolverá una URL temporal para visualizar o descargar la imagen.
+        </p>
         <label className="label">
           filePath
           <textarea className="field" value={picturePath} onChange={(e) => setPicturePath(e.target.value)} />

@@ -7,6 +7,7 @@ export type OpField = {
   required?: boolean;
   placeholder?: string;
   hint?: string;
+  options?: Array<{ value: string; label: string }>;
 };
 
 export type Operation = {
@@ -414,9 +415,32 @@ export const modules: ModuleDef[] = [
         method: "POST",
         path: "/api/hpcgw/v1/mq/subscribe",
         fields: [
-          { name: "subType", label: "subType", type: "number", required: true, placeholder: "1" },
-          { name: "subMode", label: "subMode", type: "text", required: true, placeholder: "all" },
-          json("deviceSerialList", "deviceSerialList (si list)", '["abc","def"]', false),
+          {
+            name: "subType",
+            label: "Acción de suscripción",
+            type: "number",
+            required: true,
+            placeholder: "1",
+            options: [
+              { value: "1", label: "1 · Suscribir" },
+              { value: "0", label: "0 · Cancelar suscripción" },
+            ],
+          },
+          {
+            name: "subMode",
+            label: "Alcance",
+            type: "text",
+            required: true,
+            placeholder: "all",
+            options: [
+              { value: "all", label: "all · Todos los dispositivos" },
+              { value: "list", label: "list · Solo los seleccionados" },
+            ],
+          },
+          {
+            ...json("deviceSerialList", "Dispositivos (solo si alcance=list)", "[]", false),
+            hint: "Elige uno o varios equipos desde el inventario. Se ignora cuando el alcance es all.",
+          },
         ],
       },
       {
@@ -450,8 +474,22 @@ export const modules: ModuleDef[] = [
         path: "/api/hpcgw/device/v1/defence/set",
         dangerous: true,
         fields: [
-          json("deviceSerials", "deviceSerials", '["Q01728482"]'),
-          { name: "defenceMode", label: "Modo", type: "text", required: true, placeholder: "DEVICE_DEFENCE" },
+          {
+            ...json("deviceSerials", "Dispositivos", "[]"),
+            hint: "Selecciona uno o varios paneles compatibles.",
+          },
+          {
+            name: "defenceMode",
+            label: "Modo",
+            type: "text",
+            required: true,
+            placeholder: "DEVICE_DEFENCE",
+            options: [
+              { value: "DEVICE_DEFENCE", label: "Armar" },
+              { value: "MUTE_DEFENCE", label: "Armar en silencio" },
+              { value: "DISARM", label: "Desarmar" },
+            ],
+          },
           { name: "waitResult", label: "Esperar resultado", type: "boolean" },
         ],
       },
@@ -461,7 +499,10 @@ export const modules: ModuleDef[] = [
         description: "POST /api/hpcgw/device/v1/defence/get",
         method: "POST",
         path: "/api/hpcgw/device/v1/defence/get",
-        fields: [json("deviceSerials", "deviceSerials", '["Q01728482"]')],
+        fields: [{
+          ...json("deviceSerials", "Dispositivos", "[]"),
+          hint: "Selecciona uno o varios paneles para consultar su estado.",
+        }],
       },
     ],
   },

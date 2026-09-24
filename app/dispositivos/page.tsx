@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ModulePage } from "@/components/ModulePage";
-import { hppCall } from "@/lib/client";
+import { fetchDevices } from "@/lib/devices";
 
 type DeviceRow = {
   id?: string;
@@ -25,29 +25,32 @@ function DeviceBoard() {
     setBusy(true);
     setErr("");
     try {
-      const res = await hppCall({
-        path: "/api/hpcgw/v1/device/list",
-        body: { page: 1, pageSize: 50 },
-      });
-      const data = res.result as { data?: { rows?: DeviceRow[] }; errorCode?: string; message?: string };
-      if (String(data?.errorCode) !== "0") {
-        setErr(JSON.stringify(res, null, 2));
+      const result = await fetchDevices(true);
+      if (result.error) {
+        setErr(result.error);
         setRows([]);
       } else {
-        setRows(data.data?.rows ?? []);
+        setRows(result.devices);
       }
     } finally {
       setBusy(false);
     }
   }
 
+  useEffect(() => {
+    void load();
+  }, []);
+
   return (
     <section className="neu" style={{ marginBottom: 18 }}>
       <h3>Tablero de salud</h3>
-      <p className="desc">healthStatus y online desde device/list. No hay API de informe de sitio en 2.15.500.</p>
+      <p className="desc">
+        Se carga automáticamente desde <code>device/list</code>. Usa Recargar para actualizar
+        online/offline y healthStatus; la API de informe de sitio fue eliminada en 2.15.500.
+      </p>
       <div className="btn-row">
         <button className="btn primary" disabled={busy} onClick={load}>
-          {busy ? "Cargando…" : "Cargar dispositivos"}
+          {busy ? "Cargando…" : "Recargar dispositivos"}
         </button>
       </div>
       {err && <pre className="result">{err}</pre>}

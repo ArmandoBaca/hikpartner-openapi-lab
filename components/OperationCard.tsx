@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SerialField } from "@/components/DevicePicker";
+import { DeviceIdField, MultiSerialField, SerialField } from "@/components/DevicePicker";
+import { MultiSiteField, SiteField } from "@/components/SiteField";
 import type { Operation } from "@/lib/operations";
 import { hppCall } from "@/lib/client";
 import { explainError } from "@/lib/errors";
@@ -30,6 +31,9 @@ export function OperationCard({ op }: { op: Operation }) {
     }
     return p;
   }, [op.path, op.pathParams, pathValues]);
+  const descriptionIsOnlyEndpoint =
+    op.description.trim() === `${op.method} ${op.path}` ||
+    op.description.trim() === op.path;
 
   async function run() {
     if (op.dangerous && !window.confirm(`¿Ejecutar ${op.title}? Es una operación sensible.`)) return;
@@ -77,15 +81,26 @@ export function OperationCard({ op }: { op: Operation }) {
 
   return (
     <article className="neu">
-      <h3>{op.title}</h3>
-      <p className="desc">{op.description}</p>
+      <div className="operation-head">
+        <div>
+          <h3>{op.title}</h3>
+          {!descriptionIsOnlyEndpoint && <p className="desc">{op.description}</p>}
+        </div>
+        <span className={`method-badge ${op.method.toLowerCase()}`}>{op.method}</span>
+      </div>
+      <code className="operation-path">{op.path}</code>
       {(op.pathParams ?? []).map((param) => (
         <label key={param} className="label">
-          Path {param}
+          Path {param} <span className="required-mark">obligatorio</span>
           {param === "deviceSerial" ? (
             <SerialField
               value={pathValues[param] ?? ""}
               onChange={(serial) => setPathValues((s) => ({ ...s, [param]: serial }))}
+            />
+          ) : param === "id" && op.path.includes("/site/") ? (
+            <SiteField
+              value={pathValues[param] ?? ""}
+              onChange={(siteId) => setPathValues((s) => ({ ...s, [param]: siteId }))}
             />
           ) : (
             <input
@@ -98,8 +113,21 @@ export function OperationCard({ op }: { op: Operation }) {
       ))}
       {(op.fields ?? []).map((field) => (
         <label key={field.name} className="label">
-          {field.label}
-          {field.type === "boolean" ? (
+          <span className="field-label">
+            {field.label}
+            {field.required && <span className="required-mark">obligatorio</span>}
+          </span>
+          {field.options ? (
+            <select
+              className="field"
+              value={values[field.name] ?? field.placeholder ?? field.options[0]?.value ?? ""}
+              onChange={(e) => setValues((s) => ({ ...s, [field.name]: e.target.value }))}
+            >
+              {field.options.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          ) : field.type === "boolean" ? (
             <select
               className="field"
               value={values[field.name] ?? "true"}
@@ -113,6 +141,27 @@ export function OperationCard({ op }: { op: Operation }) {
               value={values[field.name] ?? ""}
               onChange={(serial) => setValues((s) => ({ ...s, [field.name]: serial }))}
               placeholder={field.placeholder}
+            />
+          ) : field.type === "text" && field.name === "siteId" ? (
+            <SiteField
+              value={values[field.name] ?? ""}
+              onChange={(siteId) => setValues((s) => ({ ...s, [field.name]: siteId }))}
+              placeholder={field.placeholder}
+            />
+          ) : field.type === "text" && field.name === "id" && op.id === "dev-delete" ? (
+            <DeviceIdField
+              value={values[field.name] ?? ""}
+              onChange={(id) => setValues((s) => ({ ...s, [field.name]: id }))}
+            />
+          ) : field.type === "json" && field.name === "siteIds" ? (
+            <MultiSiteField
+              value={values[field.name] ?? field.placeholder ?? "[]"}
+              onChange={(json) => setValues((s) => ({ ...s, [field.name]: json }))}
+            />
+          ) : field.type === "json" && ["deviceSerials", "deviceSerialList"].includes(field.name) ? (
+            <MultiSerialField
+              value={values[field.name] ?? field.placeholder ?? "[]"}
+              onChange={(json) => setValues((s) => ({ ...s, [field.name]: json }))}
             />
           ) : field.type === "json" || field.type === "textarea" ? (
             <textarea
@@ -130,6 +179,7 @@ export function OperationCard({ op }: { op: Operation }) {
               onChange={(e) => setValues((s) => ({ ...s, [field.name]: e.target.value }))}
             />
           )}
+          {field.hint && <small className="field-hint">{field.hint}</small>}
         </label>
       ))}
       <div className="btn-row">
