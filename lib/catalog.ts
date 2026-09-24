@@ -1,5 +1,6 @@
 export const NAV = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/demo", label: "Torre de control" },
   { href: "/", label: "Conexión" },
   { href: "/sitios", label: "Sitios" },
   { href: "/dispositivos", label: "Dispositivos" },
@@ -228,6 +229,12 @@ export const CHECKLIST = [
     items: [
       { api: "ISAPI transparent A.5", where: "ISAPI / OTAP", status: "in" as const },
       { api: "OTAP prop/direct/action/profile/batch/table", where: "ISAPI / OTAP", status: "in" as const },
+    ],
+  },
+  {
+    group: "Demo práctica",
+    items: [
+      { api: "Torre de control por sitio", where: "Torre de control", status: "in" as const, note: "Inventario + salud + MQ + evidencia" },
     ],
   },
   {

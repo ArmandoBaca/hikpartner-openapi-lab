@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { EVENT_TYPES } from "@/lib/catalog";
-import { hppCall } from "@/lib/client";
+import { useEffect, useMemo, useState } from "react";
+import { useMqMonitor } from "@/hooks/useMqMonitor";
 import { fetchDevices } from "@/lib/devices";
 
 type Device = {
@@ -16,58 +15,21 @@ type Device = {
   deviceType?: string;
 };
 
-type EventItem = {
-  id: string;
-  type: string;
-  label: string;
-  serial: string;
-  format: string;
-  receivedAt: Date;
-  data: unknown;
-};
-
-function eventType(data: unknown) {
-  if (data && typeof data === "object" && "eventType" in data) {
-    return String((data as { eventType?: string }).eventType ?? "unknown");
-  }
-  if (typeof data === "string") {
-    return (
-      data.match(/<eventType>([^<]+)<\/eventType>/i)?.[1] ??
-      data.match(/"eventType"\s*:\s*"([^"]+)"/)?.[1] ??
-      "raw"
-    );
-  }
-  return "unknown";
-}
-
-function typeLabel(type: string) {
-  return EVENT_TYPES.find((item) => item.type.toLowerCase() === type.toLowerCase())?.label ?? type;
-}
-
-function severity(type: string) {
-  const value = type.toLowerCase();
-  if (/(offline|error|full|loss|intrusion|field|line|tamper|shelter)/.test(value)) return "critical";
-  if (/(online|recover|added)/.test(value)) return "ok";
-  return "info";
-}
-
 export default function DashboardPage() {
   const [devices, setDevices] = useState<Device[]>([]);
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [running, setRunning] = useState(false);
-  const [status, setStatus] = useState("Monitor detenido");
   const [filter, setFilter] = useState("all");
   const [deviceFilter, setDeviceFilter] = useState("all");
   const [loading, setLoading] = useState(false);
-  const stop = useRef(false);
-
-  useEffect(() => () => {
-    stop.current = true;
-  }, []);
+  const monitor = useMqMonitor({ scope: "all", maxEvents: 200 });
 
   useEffect(() => {
     void refreshDevices();
   }, []);
+
+  const latestEventId = monitor.events[0]?.id;
+  useEffect(() => {
+    if (latestEventId) void refreshDevices();
+  }, [latestEventId]);
 
   async function refreshDevices() {
     setLoading(true);
@@ -79,85 +41,20 @@ export default function DashboardPage() {
     }
   }
 
-  async function monitor() {
-    stop.current = false;
-    setRunning(true);
-    setStatus("Suscribiendo todos los dispositivos…");
-    const subscription = await hppCall({
-      path: "/api/hpcgw/v1/mq/subscribe",
-      body: { subType: 1, subMode: "all" },
-    });
-    const subscriptionResult = subscription.result as { errorCode?: string; message?: string };
-    if (subscriptionResult?.errorCode !== "0") {
-      setStatus(`No se pudo suscribir: ${subscriptionResult?.message ?? subscriptionResult?.errorCode ?? "error"}`);
-      setRunning(false);
-      return;
-    }
-
-    while (!stop.current) {
-      setStatus("Escuchando eventos de HPP…");
-      const response = await hppCall({
-        path: "/api/hpcgw/v1/mq/messages",
-        timeoutMs: 25_000,
-      });
-      const result = response.result as {
-        errorCode?: string;
-        message?: string;
-        data?: {
-          batchId?: string;
-          list?: Array<{ deviceSerial?: string; formatType?: string; alarmData?: unknown }>;
-        };
-      };
-      if (result?.errorCode && result.errorCode !== "0") {
-        setStatus(`Error ${result.errorCode}: ${result.message ?? "reintentando"}`);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        continue;
-      }
-
-      const rows = result?.data?.list ?? [];
-      if (rows.length) {
-        const receivedAt = new Date();
-        setEvents((previous) => [
-          ...rows.map((row, index) => {
-            const type = eventType(row.alarmData);
-            return {
-              id: `${result.data?.batchId ?? receivedAt.getTime()}-${index}`,
-              type,
-              label: typeLabel(type),
-              serial: row.deviceSerial ?? "Sin serial",
-              format: row.formatType ?? "—",
-              receivedAt,
-              data: row.alarmData,
-            };
-          }),
-          ...previous,
-        ].slice(0, 200));
-        if (result.data?.batchId) {
-          await hppCall({
-            path: "/api/hpcgw/v1/mq/offset",
-            body: { batchId: result.data.batchId },
-          });
-        }
-        setStatus(`${rows.length} evento(s) recibido(s) y confirmados`);
-        void refreshDevices();
-      } else {
-        setStatus("Sin eventos nuevos; escuchando…");
-      }
-    }
-    setRunning(false);
-    setStatus("Monitor detenido");
-  }
-
   const visibleEvents = useMemo(
-    () => events.filter((item) => (
-      (filter === "all" || severity(item.type) === filter) &&
+    () => monitor.events.filter((item) => (
+      (
+        filter === "all" ||
+        item.severity === filter ||
+        (filter === "critical" && item.severity === "warning")
+      ) &&
       (deviceFilter === "all" || item.serial === deviceFilter)
     )),
-    [events, filter, deviceFilter],
+    [monitor.events, filter, deviceFilter],
   );
   const online = devices.filter((item) => item.deviceOnlineStatus === 1).length;
   const faults = devices.filter((item) => item.healthStatus === "fault").length;
-  const critical = events.filter((item) => severity(item.type) === "critical").length;
+  const critical = monitor.events.filter((item) => ["critical", "warning"].includes(item.severity)).length;
 
   return (
     <>
@@ -171,22 +68,18 @@ export default function DashboardPage() {
           <button className="btn" disabled={loading} onClick={() => void refreshDevices()}>
             {loading ? "Actualizando…" : "Actualizar estado"}
           </button>
-          <button className="btn primary" disabled={running} onClick={() => void monitor()}>
+          <button className="btn primary" disabled={monitor.running} onClick={() => void monitor.start()}>
             Iniciar monitoreo
           </button>
-          <button className="btn danger" disabled={!running} onClick={() => {
-            stop.current = true;
-            setRunning(false);
-            setStatus("Monitor detenido");
-          }}>
+          <button className="btn danger" disabled={!monitor.running} onClick={() => void monitor.stop()}>
             Detener
           </button>
         </div>
       </header>
 
       <div className="dashboard-status">
-        <span className={`live-dot ${running ? "active" : ""}`} />
-        {status}
+        <span className={`live-dot ${monitor.running ? "active" : ""}`} />
+        {monitor.status}
         <span className="dashboard-memory">Los eventos se conservan solo en esta pestaña.</span>
       </div>
 
@@ -203,7 +96,7 @@ export default function DashboardPage() {
         </article>
         <article className="neu metric">
           <span>Eventos</span>
-          <strong>{events.length}</strong>
+          <strong>{monitor.events.length}</strong>
           <small>en esta sesión</small>
         </article>
         <article className="neu metric">
@@ -249,21 +142,21 @@ export default function DashboardPage() {
               <div className="empty-state">
                 <strong>Sin actividad</strong>
                 <span>
-                  {events.length
+              {monitor.events.length
                     ? "No hay eventos que coincidan con los filtros actuales."
                     : "Inicia el monitoreo para recibir eventos de todos los dispositivos."}
                 </span>
               </div>
             )}
             {visibleEvents.map((item) => (
-              <details className={`event-row ${severity(item.type)}`} key={item.id}>
+              <details className={`event-row ${item.severity}`} key={item.id}>
                 <summary>
-                  <span className="event-icon">{severity(item.type) === "critical" ? "!" : "•"}</span>
+                  <span className="event-icon">{item.severity === "critical" ? "!" : "•"}</span>
                   <span>
                     <strong>{item.label}</strong>
                     <small>{item.serial} · {item.format}</small>
                   </span>
-                  <time>{item.receivedAt.toLocaleTimeString()}</time>
+                  <time>{new Date(item.receivedAt).toLocaleTimeString()}</time>
                 </summary>
                 <pre className="result">
                   {typeof item.data === "string" ? item.data : JSON.stringify(item.data, null, 2)}
@@ -294,6 +187,7 @@ export default function DashboardPage() {
           </section>
           <section className="neu quick-links">
             <h3>Acciones rápidas</h3>
+            <Link href="/demo">Abrir demo Torre de control</Link>
             <Link href="/alarmas">Defensa y fotos de alarma</Link>
             <Link href="/audio">Emitir audio o TTS</Link>
             <Link href="/sitios">Gestionar sitios</Link>

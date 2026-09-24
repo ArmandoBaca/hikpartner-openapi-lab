@@ -21,6 +21,13 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     steps: ["Actualiza el inventario", "Inicia el monitoreo", "Filtra los eventos por severidad"],
     warning: "Dashboard y Alarmas consumen la misma cola MQ. No mantengas ambos monitores activos al mismo tiempo.",
   },
+  "/demo": {
+    title: "Supervisa instalaciones como un integrador",
+    purpose: "Convierte inventario, salud y eventos MQ en una vista operativa por sitio para priorizar incidencias reales.",
+    uses: ["NOC ligero", "Estado por sitio", "Triage de incidentes", "Evidencia de alarma"],
+    steps: ["Selecciona una instalación", "Revisa disponibilidad y fallas", "Inicia MQ y abre los eventos relevantes"],
+    warning: "Es una demo efímera: requiere la pestaña abierta, no sustituye un backend 24/7 y comparte la cola MQ con Dashboard y Alarmas.",
+  },
   "/sitios": {
     title: "Organiza instalaciones y permisos",
     purpose: "Los sitios agrupan dispositivos, zona horaria, ubicación, responsables y accesos de cliente.",

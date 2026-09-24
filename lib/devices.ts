@@ -12,6 +12,8 @@ export type HppDevice = {
   deviceCategory?: number;
   deviceSubCategory?: number;
   deviceType?: string;
+  deviceVersion?: string;
+  siteID?: string;
   siteName?: string;
 };
 

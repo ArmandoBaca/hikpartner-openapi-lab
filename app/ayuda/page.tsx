@@ -13,7 +13,19 @@ const sections = [
     link: ["/", "Abrir Conexión"],
   },
   {
-    title: "2. Dashboard",
+    title: "2. Torre de control",
+    purpose: "Ejemplo práctico de supervisión para un integrador, organizado por instalación.",
+    steps: [
+      "Carga automáticamente sitios y dispositivos y calcula disponibilidad, desconectados y fallas.",
+      "Selecciona Todos los sitios o una instalación concreta; la suscripción MQ usa el mismo alcance.",
+      "Los sitios con más riesgo aparecen primero para orientar la atención del operador.",
+      "Abre un evento para revisar el payload y resolver imágenes ISAPI_FILES cuando existan.",
+      "Exporta la fotografía actual de inventario y eventos a JSON o CSV; nada se guarda en el servidor.",
+    ],
+    link: ["/demo", "Abrir Torre de control"],
+  },
+  {
+    title: "3. Dashboard",
     purpose: "Es la vista principal para operar: combina inventario, salud y todos los eventos.",
     steps: [
       "Actualizar estado consulta hasta 100 dispositivos y resume cuántos están en línea o con falla.",
@@ -25,7 +37,7 @@ const sections = [
     link: ["/dashboard", "Abrir Dashboard"],
   },
   {
-    title: "3. Sitios y dispositivos",
+    title: "4. Sitios y dispositivos",
     purpose: "Gestiona el inventario de la cuenta y consulta su estado.",
     steps: [
       "Un dispositivo debe pertenecer a un sitio. Crea primero el sitio y después registra el serial.",
@@ -36,7 +48,7 @@ const sections = [
     link: ["/dispositivos", "Ver dispositivos"],
   },
   {
-    title: "4. Alarmas y eventos",
+    title: "5. Alarmas y eventos",
     purpose: "Recibe el flujo original y permite acciones específicas de seguridad.",
     steps: [
       "El Dashboard es la vista recomendada para observar todo. Alarmas conserva herramientas avanzadas.",
@@ -48,7 +60,7 @@ const sections = [
     link: ["/alarmas", "Herramientas de alarmas"],
   },
   {
-    title: "5. Audio",
+    title: "6. Audio",
     purpose: "Administra archivos y ordena su reproducción en altavoces IP Hikvision.",
     steps: [
       "Solo aplica a dispositivos category 12 / subcategory 19 (IP Speaker).",
@@ -64,7 +76,7 @@ const sections = [
     link: ["/audio", "Abrir Audio"],
   },
   {
-    title: "6. Webhook, ARC y herramientas avanzadas",
+    title: "7. Webhook, ARC y herramientas avanzadas",
     purpose: "Funciones especializadas para integradores.",
     steps: [
       "Webhook permite configurar el callback, pero este lab sin almacenamiento no puede conservar su inbox.",
@@ -92,9 +104,9 @@ export default function HelpPage() {
         <h3>Flujo recomendado</h3>
         <ol className="flow-steps">
           <li><span>1</span>Conecta las credenciales</li>
-          <li><span>2</span>Abre el Dashboard</li>
-          <li><span>3</span>Carga dispositivos</li>
-          <li><span>4</span>Inicia monitoreo</li>
+          <li><span>2</span>Abre Torre de control</li>
+          <li><span>3</span>Elige una instalación</li>
+          <li><span>4</span>Inicia el monitor</li>
           <li><span>5</span>Investiga o actúa desde cada módulo</li>
         </ol>
         <div className="note">
